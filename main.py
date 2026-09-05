@@ -1,5 +1,6 @@
 import streamlit as st
 from datetime import datetime
+from ai_meal_planner import generate_meal_plan
 from database import (
     init_db,
     register_user,
@@ -420,6 +421,12 @@ elif page == "👤 Profile":
                 placeholder="Example: peanuts, lactose"
             )
 
+        meals_per_day = st.selectbox(
+            "Meals per day",
+            [3, 4, 5],
+            index=0
+        )
+
         submitted = st.form_submit_button(
             "🔍 Analyze My Nutrition"
         )
@@ -442,6 +449,7 @@ elif page == "👤 Profile":
             st.session_state["dietary_preference"] = dietary_preference
             st.session_state["fitness_goal"] = fitness_goal
             st.session_state["allergies"] = allergies
+            st.session_state["meals_per_day"] = meals_per_day
 
             # Persist to the database as well, so it survives across sessions
             save_user_profile(st.session_state["user_id"], {
@@ -522,6 +530,7 @@ elif page == "📊 Health Analysis":
         height = st.session_state["height"]
         age = st.session_state["age"]
         gender = st.session_state["gender"]
+        activity_level = st.session_state["activity_level"]
 
         # BMI calculation
         height_m = height / 100
@@ -535,7 +544,37 @@ elif page == "📊 Health Analysis":
         else:
             bmr = (10 * weight) + (6.25 * height) - (5 * age) - 161
 
-        # Persist the calculated metrics onto the user's profile row
+        # ---- Placeholder TDEE + macro targets -------------------------
+        # NOTE: this is a simple placeholder calculation standing in for
+        # a dedicated TDEE/macro-target module. Replace this block if a
+        # more precise one is built later — the AI meal planner only
+        # needs calorie_target / protein_target / carbs_target /
+        # fat_target to be present in session_state, however computed.
+        activity_multipliers = {
+            "Sedentary": 1.2,
+            "Lightly Active": 1.375,
+            "Moderately Active": 1.55,
+            "Very Active": 1.725,
+            "Extremely Active": 1.9,
+        }
+        tdee = bmr * activity_multipliers.get(activity_level, 1.2)
+        calorie_target = tdee
+        protein_target = (0.3 * calorie_target) / 4   # 30% of kcal, 4 kcal/g protein
+        fat_target = (0.25 * calorie_target) / 9       # 25% of kcal, 9 kcal/g fat
+        carbs_target = (0.45 * calorie_target) / 4     # 45% of kcal, 4 kcal/g carb
+        # -----------------------------------------------------------------
+
+        # Persist so the Meal Planner page can use these without recomputing
+        st.session_state["bmi"] = bmi
+        st.session_state["bmr"] = bmr
+        st.session_state["tdee"] = tdee
+        st.session_state["calorie_target"] = calorie_target
+        st.session_state["protein_target"] = protein_target
+        st.session_state["carbs_target"] = carbs_target
+        st.session_state["fat_target"] = fat_target
+
+        # Persist the calculated metrics onto the user's profile row too,
+        # so they survive across sessions/logins.
         save_user_profile(st.session_state["user_id"], {
             "age": age,
             "gender": gender,
@@ -546,7 +585,10 @@ elif page == "📊 Health Analysis":
             "fitness_goal": st.session_state.get("fitness_goal"),
             "allergies": st.session_state.get("allergies"),
             "bmi": bmi,
-            "daily_calories": bmr,
+            "daily_calories": calorie_target,
+            "protein_g": protein_target,
+            "carbs_g": carbs_target,
+            "fat_g": fat_target,
         })
 
         st.markdown(
@@ -570,8 +612,8 @@ elif page == "📊 Health Analysis":
 
         with col3:
             st.metric(
-                "Weight",
-                f"{weight:.1f} kg"
+                "TDEE",
+                f"{tdee:.0f} kcal/day"
             )
 
         if bmi < 18.5:
@@ -591,18 +633,17 @@ elif page == "📊 Health Analysis":
         )
 
         st.markdown(
-            """
-            <div class="info-card">
-                <h3>Next Step</h3>
-                <p>
-                In the next version, this section will calculate
-                TDEE, daily calorie requirements, protein,
-                carbohydrates, fats and fiber.
-                </p>
-            </div>
-            """,
+            '<div class="section-title">Daily Nutrition Targets</div>',
             unsafe_allow_html=True
         )
+
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            st.metric("Protein target", f"{protein_target:.0f} g")
+        with col2:
+            st.metric("Carbs target", f"{carbs_target:.0f} g")
+        with col3:
+            st.metric("Fat target", f"{fat_target:.0f} g")
 
 
 # ---------------------------------------------------------
@@ -628,6 +669,13 @@ elif page == "🥗 Meal Planner":
             "Please create your profile first."
         )
 
+    elif "calorie_target" not in st.session_state:
+
+        st.warning(
+            "Please complete the 📊 Health Analysis step first, "
+            "so your nutrition targets are available."
+        )
+
     else:
 
         st.success(
@@ -640,43 +688,141 @@ elif page == "🥗 Meal Planner":
             <div class="info-card">
                 <h3>🤖 AI Meal Planning</h3>
                 <p>
-                This section will later connect to the OpenAI API
-                to generate personalized breakfast, lunch, snacks
-                and dinner based on your nutritional requirements.
+                Click below to generate a personalized breakfast, lunch,
+                snacks and dinner plan based on your nutritional
+                requirements, using the Mistral API.
                 </p>
             </div>
             """,
             unsafe_allow_html=True
         )
 
+        # ---- Build user_data from session_state -----------------------
+        raw_allergies = st.session_state.get("allergies", "")
+        allergies_list = [
+            a.strip() for a in raw_allergies.split(",") if a.strip()
+        ] if raw_allergies else []
+
+        user_data = {
+            "age": st.session_state["age"],
+            "gender": st.session_state["gender"],
+            "height": st.session_state["height"],
+            "weight": st.session_state["weight"],
+            "bmi": st.session_state["bmi"],
+            "bmr": st.session_state["bmr"],
+            "tdee": st.session_state["tdee"],
+            "calorie_target": st.session_state["calorie_target"],
+            "protein_target": st.session_state["protein_target"],
+            "carbs_target": st.session_state["carbs_target"],
+            "fat_target": st.session_state["fat_target"],
+            "diet": st.session_state["dietary_preference"],
+            "allergies": allergies_list,
+            "avoid_foods": [],
+            "meals_per_day": st.session_state.get("meals_per_day", 3),
+        }
+
+        # ---- recommended_foods placeholder -----------------------------
+        # NOTE: this stands in for a teammate-owned Random Forest module.
+        # Swap this list for whatever that module returns, e.g.:
+        #   recommended_foods = st.session_state["rf_recommended_foods"]
+        recommended_foods = st.session_state.get(
+            "rf_recommended_foods",
+            [
+                {"food": "Oats", "calories": 150, "protein": 5},
+                {"food": "Paneer", "calories": 265, "protein": 18},
+                {"food": "Banana", "calories": 105, "protein": 1.3},
+                {"food": "Lentils (Dal)", "calories": 230, "protein": 18},
+                {"food": "Brown Rice", "calories": 215, "protein": 5},
+            ]
+        )
+        # -----------------------------------------------------------------
+
         if st.button("✨ Generate Personalized Meal Plan"):
 
-            # -----------------------------------------------------
-            # TODO: replace this block with your real OpenAI API call.
-            # Send st.session_state's profile fields (age, weight,
-            # dietary_preference, fitness_goal, allergies, etc.) as
-            # the prompt, and parse the response into `items` below.
-            # -----------------------------------------------------
-            ai_summary = (
-                f"Placeholder plan for {st.session_state['dietary_preference']} diet, "
-                f"goal: {st.session_state['fitness_goal']}."
-            )
-            items = [
-                {"meal_type": "breakfast", "food_name": "Sample breakfast item",
-                 "calories": 300, "protein_g": 10, "carbs_g": 45, "fat_g": 8,
-                 "recipe_text": "Placeholder recipe text."},
-                {"meal_type": "lunch", "food_name": "Sample lunch item",
-                 "calories": 500, "protein_g": 20, "carbs_g": 60, "fat_g": 15,
-                 "recipe_text": "Placeholder recipe text."},
-                {"meal_type": "dinner", "food_name": "Sample dinner item",
-                 "calories": 450, "protein_g": 18, "carbs_g": 50, "fat_g": 12,
-                 "recipe_text": "Placeholder recipe text."},
-            ]
+            with st.spinner("Generating your personalized meal plan..."):
+                meal_plan = generate_meal_plan(user_data, recommended_foods)
 
+            st.session_state["last_meal_plan"] = meal_plan
+
+            # Persist to SQLite so it shows up in Previous Plans across sessions.
+            db_items = []
+            for meal in meal_plan.get("meals", []):
+                for food in meal.get("foods", []):
+                    db_items.append({
+                        "meal_type": meal.get("meal", "Meal").lower(),
+                        "food_name": food.get("name", "Unknown item"),
+                        "calories": food.get("calories"),
+                        "protein_g": food.get("protein_g"),
+                        "carbs_g": food.get("carbs_g"),
+                        "fat_g": food.get("fat_g"),
+                        "recipe_text": food.get("quantity", ""),
+                    })
+
+            ai_summary = "; ".join(meal_plan.get("notes", [])) or "AI-generated daily meal plan."
             plan_date = str(datetime.utcnow().date())
-            save_meal_plan(st.session_state["user_id"], plan_date, ai_summary, items)
+            save_meal_plan(st.session_state["user_id"], plan_date, ai_summary, db_items)
 
-            st.success("✅ Meal plan generated and saved! Check 📜 Previous Plans to view it.")
+        if "last_meal_plan" in st.session_state:
+
+            meal_plan = st.session_state["last_meal_plan"]
+
+            if meal_plan.get("is_fallback"):
+                st.warning(
+                    "AI meal generation was unavailable, so a simple plan "
+                    "was built directly from your recommended foods instead."
+                )
+                with st.expander("Why did this happen? (diagnostic info)"):
+                    st.write("**Reason:**", meal_plan.get("error_reason"))
+                    diag = meal_plan.get("diagnostics", {})
+                    if diag:
+                        st.write("**Python executable:**", diag.get("python_executable"))
+                        st.write("**Mistral SDK importable:**", diag.get("mistral_sdk_available"))
+                        st.write("**Import error:**", diag.get("mistral_import_error"))
+                        st.write("**API key present:**", diag.get("api_key_present"))
+
+            st.markdown("## 🍽️ Your Personalized Meal Plan")
+
+            meal_icons = {
+                "Breakfast": "🌅",
+                "Lunch": "☀️",
+                "Snack": "🍎",
+                "Dinner": "🌙",
+            }
+
+            for meal in meal_plan.get("meals", []):
+                icon = meal_icons.get(meal["meal"], "🍽️")
+                st.markdown(f"### {icon} {meal['meal']}")
+
+                for food in meal.get("foods", []):
+                    qty = f" — {food['quantity']}" if food.get("quantity") else ""
+                    st.markdown(f"* {food['name']}{qty}")
+
+                col1, col2 = st.columns(2)
+                with col1:
+                    st.markdown(
+                        f"**Calories:** {meal.get('meal_calories', '—')} kcal"
+                    )
+                with col2:
+                    protein_sum = sum(
+                        (f.get("protein_g") or 0) for f in meal.get("foods", [])
+                    )
+                    st.markdown(f"**Protein:** {protein_sum:.0f} g")
+
+            st.markdown("---")
+            st.markdown("### 📊 Daily Nutrition Summary")
+            summary = meal_plan.get("daily_summary", {})
+            c1, c2, c3, c4 = st.columns(4)
+            c1.metric("Calories", f"{summary.get('calories', '—')} kcal")
+            c2.metric("Protein", f"{summary.get('protein_g', '—')} g")
+            c3.metric("Carbs", f"{summary.get('carbs_g', '—')} g")
+            c4.metric("Fat", f"{summary.get('fat_g', '—')} g")
+
+            if meal_plan.get("notes"):
+                st.markdown("### 📝 Notes")
+                for note in meal_plan["notes"]:
+                    st.info(note)
+
+            st.caption(meal_plan.get("disclaimer", ""))
 
 
 # ---------------------------------------------------------
@@ -740,7 +886,7 @@ elif page == "ℹ️ About":
             <p>🎨 Streamlit</p>
             <p>📊 Pandas & NumPy</p>
             <p>🤖 Machine Learning</p>
-            <p>🧠 OpenAI LLM</p>
+            <p>🧠 Mistral AI</p>
             <p>🗄️ SQLite Database</p>
             <p>📈 Plotly</p>
 
