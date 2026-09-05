@@ -1,4 +1,18 @@
 import streamlit as st
+from datetime import datetime
+from database import (
+    init_db,
+    register_user,
+    verify_login,
+    save_user_profile,
+    save_meal_plan,
+    get_meal_plans,
+)
+
+# ---------------------------------------------------------
+# DATABASE INITIALIZATION (creates tables on first run)
+# ---------------------------------------------------------
+init_db()
 
 # ---------------------------------------------------------
 # PAGE CONFIGURATION
@@ -121,6 +135,60 @@ st.markdown("""
 
 
 # ---------------------------------------------------------
+# LOGIN / SIGNUP GATE
+# ---------------------------------------------------------
+if "user_id" not in st.session_state:
+
+    st.markdown(
+        '<div class="main-title">🥗 AI Nutrition Planner</div>',
+        unsafe_allow_html=True
+    )
+    st.markdown(
+        '<div class="subtitle">Please log in or create an account to continue.</div>',
+        unsafe_allow_html=True
+    )
+
+    login_tab, signup_tab = st.tabs(["🔑 Login", "📝 Sign Up"])
+
+    with login_tab:
+        with st.form("login_form"):
+            login_username = st.text_input("Username", key="login_username")
+            login_password = st.text_input("Password", type="password", key="login_password")
+            login_submitted = st.form_submit_button("Log In")
+
+        if login_submitted:
+            user = verify_login(login_username, login_password)
+            if user:
+                st.session_state["user_id"] = user["user_id"]
+                st.session_state["username"] = user["username"]
+                st.rerun()
+            else:
+                st.error("Invalid username or password.")
+
+    with signup_tab:
+        with st.form("signup_form"):
+            signup_username = st.text_input("Choose a username", key="signup_username")
+            signup_email = st.text_input("Email", key="signup_email")
+            signup_password = st.text_input("Choose a password", type="password", key="signup_password")
+            signup_submitted = st.form_submit_button("Create Account")
+
+        if signup_submitted:
+            if not signup_username.strip() or not signup_password:
+                st.error("Username and password are required.")
+            else:
+                try:
+                    new_user_id = register_user(signup_username, signup_email, signup_password)
+                    st.session_state["user_id"] = new_user_id
+                    st.session_state["username"] = signup_username
+                    st.success("Account created! Redirecting...")
+                    st.rerun()
+                except Exception:
+                    st.error("That username or email is already taken.")
+
+    st.stop()  # Don't render the rest of the app until logged in
+
+
+# ---------------------------------------------------------
 # SIDEBAR
 # ---------------------------------------------------------
 st.sidebar.markdown(
@@ -152,6 +220,13 @@ page = st.sidebar.radio(
     ],
     label_visibility="collapsed"
 )
+
+st.sidebar.markdown("---")
+st.sidebar.markdown(f"Logged in as **{st.session_state['username']}**")
+if st.sidebar.button("🚪 Log Out"):
+    for key in ["user_id", "username"]:
+        st.session_state.pop(key, None)
+    st.rerun()
 
 st.sidebar.markdown("---")
 
@@ -368,6 +443,18 @@ elif page == "👤 Profile":
             st.session_state["fitness_goal"] = fitness_goal
             st.session_state["allergies"] = allergies
 
+            # Persist to the database as well, so it survives across sessions
+            save_user_profile(st.session_state["user_id"], {
+                "age": age,
+                "gender": gender,
+                "height_cm": height,
+                "weight_kg": weight,
+                "activity_level": activity_level,
+                "dietary_preference": dietary_preference,
+                "fitness_goal": fitness_goal,
+                "allergies": allergies,
+            })
+
             st.success(
                 "✅ Profile saved successfully!"
             )
@@ -447,6 +534,20 @@ elif page == "📊 Health Analysis":
 
         else:
             bmr = (10 * weight) + (6.25 * height) - (5 * age) - 161
+
+        # Persist the calculated metrics onto the user's profile row
+        save_user_profile(st.session_state["user_id"], {
+            "age": age,
+            "gender": gender,
+            "height_cm": height,
+            "weight_kg": weight,
+            "activity_level": st.session_state.get("activity_level"),
+            "dietary_preference": st.session_state.get("dietary_preference"),
+            "fitness_goal": st.session_state.get("fitness_goal"),
+            "allergies": st.session_state.get("allergies"),
+            "bmi": bmi,
+            "daily_calories": bmr,
+        })
 
         st.markdown(
             '<div class="section-title">Your Health Metrics</div>',
@@ -548,9 +649,34 @@ elif page == "🥗 Meal Planner":
             unsafe_allow_html=True
         )
 
-        st.button(
-            "✨ Generate Personalized Meal Plan"
-        )
+        if st.button("✨ Generate Personalized Meal Plan"):
+
+            # -----------------------------------------------------
+            # TODO: replace this block with your real OpenAI API call.
+            # Send st.session_state's profile fields (age, weight,
+            # dietary_preference, fitness_goal, allergies, etc.) as
+            # the prompt, and parse the response into `items` below.
+            # -----------------------------------------------------
+            ai_summary = (
+                f"Placeholder plan for {st.session_state['dietary_preference']} diet, "
+                f"goal: {st.session_state['fitness_goal']}."
+            )
+            items = [
+                {"meal_type": "breakfast", "food_name": "Sample breakfast item",
+                 "calories": 300, "protein_g": 10, "carbs_g": 45, "fat_g": 8,
+                 "recipe_text": "Placeholder recipe text."},
+                {"meal_type": "lunch", "food_name": "Sample lunch item",
+                 "calories": 500, "protein_g": 20, "carbs_g": 60, "fat_g": 15,
+                 "recipe_text": "Placeholder recipe text."},
+                {"meal_type": "dinner", "food_name": "Sample dinner item",
+                 "calories": 450, "protein_g": 18, "carbs_g": 50, "fat_g": 12,
+                 "recipe_text": "Placeholder recipe text."},
+            ]
+
+            plan_date = str(datetime.utcnow().date())
+            save_meal_plan(st.session_state["user_id"], plan_date, ai_summary, items)
+
+            st.success("✅ Meal plan generated and saved! Check 📜 Previous Plans to view it.")
 
 
 # ---------------------------------------------------------
@@ -570,22 +696,21 @@ elif page == "📜 Previous Plans":
         unsafe_allow_html=True
     )
 
-    st.info(
-        "No saved meal plans yet."
-    )
+    plans = get_meal_plans(st.session_state["user_id"])
 
-    st.markdown(
-        """
-        <div class="info-card">
-            <h3>Coming Soon</h3>
-            <p>
-            Once SQLite database storage is added, your previous
-            meal plans will appear here.
-            </p>
-        </div>
-        """,
-        unsafe_allow_html=True
-    )
+    if not plans:
+        st.info("No saved meal plans yet. Generate one from 🥗 Meal Planner!")
+    else:
+        for plan in plans:
+            with st.expander(f"📅 {plan['plan_date']} — {plan['ai_summary']}"):
+                for item in plan["items"]:
+                    st.markdown(
+                        f"**{item['meal_type'].title()}**: {item['food_name']} "
+                        f"({item['calories']} kcal, "
+                        f"P {item['protein_g']}g / C {item['carbs_g']}g / F {item['fat_g']}g)"
+                    )
+                    if item.get("recipe_text"):
+                        st.caption(item["recipe_text"])
 
 
 # ---------------------------------------------------------
