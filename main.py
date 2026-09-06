@@ -25,114 +25,716 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
+
 # ---------------------------------------------------------
-# CUSTOM CSS
+# PROFESSIONAL CUSTOM CSS
 # ---------------------------------------------------------
+
+
+
 st.markdown("""
 <style>
 
-    /* Main application background */
+    /* =====================================================
+       GLOBAL PAGE
+       ===================================================== */
+
     .stApp {
-        background: linear-gradient(135deg, #f7fff9 0%, #eefaf2 100%);
+        background:
+            radial-gradient(
+                circle at 10% 0%,
+                rgba(255, 218, 185, 0.28),
+                transparent 28%
+            ),
+            radial-gradient(
+                circle at 95% 8%,
+                rgba(248, 205, 218, 0.25),
+                transparent 25%
+            ),
+            linear-gradient(
+                135deg,
+                #FFFDF9 0%,
+                #FBF8F4 48%,
+                #F7F5F2 100%
+            );
+
+        color: #292929;
     }
 
-    /* Main content */
+
+    /* Main content width and spacing */
+
     .main {
-        padding: 2rem;
+        padding: 0;
     }
 
-    /* Sidebar */
-    section[data-testid="stSidebar"] {
-        background: linear-gradient(180deg, #143d2a 0%, #1f6040 100%);
+    .block-container {
+        max-width: 1380px;
+
+        padding-top: 2.8rem;
+        padding-bottom: 4rem;
+        padding-left: 3.5rem;
+        padding-right: 3.5rem;
     }
+
+
+    /* =====================================================
+       MAIN HEADINGS
+       ===================================================== */
+
+    .main-title {
+        font-size: 45px;
+
+        font-weight: 800;
+
+        color: #202020;
+
+        letter-spacing: -1.4px;
+
+        line-height: 1.12;
+
+        margin-top: 0;
+        margin-bottom: 8px;
+    }
+
+
+    .subtitle {
+        font-size: 17px;
+
+        color: #77736F;
+
+        line-height: 1.65;
+
+        margin-bottom: 32px;
+
+        max-width: 850px;
+    }
+
+
+    /* =====================================================
+       SECTION HEADINGS
+       ===================================================== */
+
+    .section-title {
+        font-size: 25px;
+
+        font-weight: 750;
+
+        color: #2C2A29;
+
+        letter-spacing: -0.4px;
+
+        margin-top: 20px;
+        margin-bottom: 18px;
+    }
+
+
+    /* =====================================================
+       SIDEBAR
+       ===================================================== */
+
+    section[data-testid="stSidebar"] {
+
+        background:
+            linear-gradient(
+                180deg,
+                #242424 0%,
+                #1E1E1E 100%
+            );
+
+        border-right: none;
+
+        box-shadow:
+            5px 0 25px rgba(0, 0, 0, 0.08);
+    }
+
+
+    /* Sidebar text */
 
     section[data-testid="stSidebar"] .stMarkdown,
     section[data-testid="stSidebar"] label,
-    section[data-testid="stSidebar"] p {
-        color: white !important;
+    section[data-testid="stSidebar"] p,
+    section[data-testid="stSidebar"] span {
+
+        color: #F7F3EE !important;
     }
 
-    /* Sidebar navigation radio buttons */
-    section[data-testid="stSidebar"] div[role="radiogroup"] label {
-        background-color: rgba(255, 255, 255, 0.08);
+
+    /* Sidebar title */
+
+    section[data-testid="stSidebar"] h2 {
+
+        color: #FFFFFF !important;
+
+        font-weight: 750;
+
+        letter-spacing: -0.5px;
+    }
+
+
+    /* Sidebar navigation */
+
+    section[data-testid="stSidebar"]
+    div[role="radiogroup"] {
+
+        gap: 7px;
+    }
+
+
+    section[data-testid="stSidebar"]
+    div[role="radiogroup"] label {
+
+        background: rgba(255, 255, 255, 0.055);
+
+        border: 1px solid rgba(255, 255, 255, 0.06);
+
         padding: 12px 15px;
-        border-radius: 10px;
-        margin-bottom: 8px;
-        transition: 0.3s;
+
+        border-radius: 12px;
+
+        margin-bottom: 7px;
+
+        transition:
+            all 0.25s ease;
     }
 
-    section[data-testid="stSidebar"] div[role="radiogroup"] label:hover {
-        background-color: rgba(255, 255, 255, 0.18);
+
+    /* Sidebar hover */
+
+    section[data-testid="stSidebar"]
+    div[role="radiogroup"] label:hover {
+
+        background: rgba(255, 207, 184, 0.14);
+
+        border-color: rgba(255, 207, 184, 0.20);
+
+        transform: translateX(3px);
     }
 
-    /* Main title */
-    .main-title {
-        font-size: 42px;
-        font-weight: 800;
-        color: #14532d;
-        margin-bottom: 5px;
+
+    /* Sidebar divider */
+
+    section[data-testid="stSidebar"] hr {
+
+        border-top:
+            1px solid rgba(255, 255, 255, 0.10);
     }
 
-    .subtitle {
-        font-size: 18px;
-        color: #4b6354;
-        margin-bottom: 25px;
+
+    /* Sidebar information box */
+
+    section[data-testid="stSidebar"] .stAlert {
+
+        background:
+            rgba(255, 255, 255, 0.07);
+
+        border:
+            1px solid rgba(255, 255, 255, 0.10);
+
+        border-radius: 13px;
+
+        color: #F5F0EB;
     }
 
-    /* Cards */
+
+    /* =====================================================
+       FEATURE / INFORMATION CARDS
+       ===================================================== */
+
     .info-card {
-        background-color: white;
-        padding: 25px;
-        border-radius: 18px;
-        box-shadow: 0 5px 20px rgba(0, 0, 0, 0.08);
-        margin-bottom: 20px;
-        border-left: 5px solid #2e8b57;
+
+        background:
+            rgba(255, 255, 255, 0.90);
+
+        padding: 28px;
+
+        border-radius: 22px;
+
+        border: 1px solid #EDE5DE;
+
+        margin-bottom: 24px;
+
+        box-shadow:
+            0 8px 28px rgba(68, 57, 49, 0.07);
+
+        transition:
+            transform 0.25s ease,
+            box-shadow 0.25s ease;
     }
 
-    /* Section headings */
-    .section-title {
-        font-size: 26px;
-        font-weight: 700;
-        color: #14532d;
-        margin-top: 10px;
-        margin-bottom: 15px;
+
+    /* Card hover */
+
+    .info-card:hover {
+
+        transform: translateY(-3px);
+
+        box-shadow:
+            0 14px 35px rgba(68, 57, 49, 0.11);
     }
 
-    /* Buttons */
+
+    /* Card headings */
+
+    .info-card h2,
+    .info-card h3 {
+
+        color: #292727;
+
+        margin-top: 0;
+
+        margin-bottom: 11px;
+
+        font-weight: 750;
+    }
+
+
+    /* Card paragraph */
+
+    .info-card p {
+
+        color: #706B67;
+
+        line-height: 1.7;
+
+        margin-bottom: 7px;
+    }
+
+
+    /* =====================================================
+       SPECIAL CARD ACCENT
+       ===================================================== */
+
+    .info-card:first-child {
+
+        border-top: 4px solid #F4B183;
+    }
+
+
+    /* =====================================================
+       FORMS
+       ===================================================== */
+
+    div[data-testid="stForm"] {
+
+        background:
+            rgba(255, 255, 255, 0.94);
+
+        padding: 30px;
+
+        border-radius: 22px;
+
+        border: 1px solid #E9E1DA;
+
+        box-shadow:
+            0 10px 30px rgba(61, 51, 45, 0.07);
+
+        margin-bottom: 30px;
+    }
+
+
+    /* Form labels */
+
+    .stTextInput label,
+    .stNumberInput label,
+    .stSelectbox label {
+
+        color: #45413F !important;
+
+        font-size: 14px !important;
+
+        font-weight: 650 !important;
+    }
+
+
+    /* =====================================================
+       TEXT INPUTS
+       ===================================================== */
+
+    .stTextInput input,
+    .stNumberInput input {
+
+        background: #FFFEFC !important;
+
+        color: #292929 !important;
+
+        border: 1px solid #DDD6D0 !important;
+
+        border-radius: 11px !important;
+
+        min-height: 44px;
+
+        transition:
+            border-color 0.2s ease,
+            box-shadow 0.2s ease;
+    }
+
+
+    /* Input focus */
+
+    .stTextInput input:focus,
+    .stNumberInput input:focus {
+
+        border-color: #E7A27F !important;
+
+        box-shadow:
+            0 0 0 3px rgba(231, 162, 127, 0.15) !important;
+    }
+
+
+    /* =====================================================
+       SELECT BOXES
+       ===================================================== */
+
+    div[data-baseweb="select"] > div {
+
+        background: #FFFEFC !important;
+
+        border: 1px solid #DDD6D0 !important;
+
+        border-radius: 11px !important;
+
+        min-height: 44px;
+    }
+
+
+    /* =====================================================
+       PRIMARY BUTTONS
+       ===================================================== */
+
     .stButton > button {
-        background: linear-gradient(90deg, #2e8b57, #3ca86b);
-        color: white;
+
+        background:
+            linear-gradient(
+                135deg,
+                #E99B73 0%,
+                #EFAF88 100%
+            );
+
+        color: #FFFFFF !important;
+
         border: none;
-        border-radius: 10px;
-        padding: 10px 25px;
-        font-size: 16px;
-        font-weight: 600;
-        transition: 0.3s;
+
+        border-radius: 12px;
+
+        padding: 12px 26px;
+
+        min-height: 45px;
+
+        font-size: 15px;
+
+        font-weight: 700;
+
+        letter-spacing: 0.1px;
+
+        box-shadow:
+            0 6px 16px rgba(217, 139, 102, 0.22);
+
+        transition:
+            all 0.25s ease;
     }
+
+
+    /* Button hover */
 
     .stButton > button:hover {
-        background: linear-gradient(90deg, #256f46, #318c59);
+
+        background:
+            linear-gradient(
+                135deg,
+                #D98964 0%,
+                #E69E78 100%
+            );
+
         transform: translateY(-2px);
+
+        box-shadow:
+            0 9px 22px rgba(217, 139, 102, 0.28);
     }
 
-    /* Form */
-    div[data-testid="stForm"] {
-        background-color: white;
-        padding: 25px;
-        border-radius: 18px;
-        box-shadow: 0 5px 20px rgba(0, 0, 0, 0.07);
+
+    /* Button active */
+
+    .stButton > button:active {
+
+        transform: translateY(0);
     }
 
-    /* Metrics */
+
+    /* =====================================================
+       FORM SUBMIT BUTTON
+       ===================================================== */
+
+    .stFormSubmitButton > button {
+
+        background:
+            linear-gradient(
+                135deg,
+                #E99B73 0%,
+                #EFAF88 100%
+            );
+
+        color: #FFFFFF !important;
+
+        border: none;
+
+        border-radius: 12px;
+
+        padding: 12px 28px;
+
+        min-height: 45px;
+
+        font-size: 15px;
+
+        font-weight: 700;
+
+        box-shadow:
+            0 6px 16px rgba(217, 139, 102, 0.22);
+
+        transition:
+            all 0.25s ease;
+    }
+
+
+    .stFormSubmitButton > button:hover {
+
+        background:
+            linear-gradient(
+                135deg,
+                #D98964 0%,
+                #E69E78 100%
+            );
+
+        transform: translateY(-2px);
+
+        box-shadow:
+            0 9px 22px rgba(217, 139, 102, 0.28);
+    }
+
+
+    /* =====================================================
+       METRIC CARDS
+       ===================================================== */
+
     div[data-testid="stMetric"] {
-        background-color: white;
-        padding: 15px;
-        border-radius: 15px;
-        box-shadow: 0 4px 15px rgba(0, 0, 0, 0.06);
+
+        background:
+            rgba(255, 255, 255, 0.94);
+
+        padding: 20px;
+
+        border-radius: 18px;
+
+        border: 1px solid #EAE2DB;
+
+        box-shadow:
+            0 7px 20px rgba(61, 51, 45, 0.06);
+
+        min-height: 110px;
+
+        transition:
+            transform 0.2s ease,
+            box-shadow 0.2s ease;
     }
+
+
+    /* Metric hover */
+
+    div[data-testid="stMetric"]:hover {
+
+        transform: translateY(-2px);
+
+        box-shadow:
+            0 10px 25px rgba(61, 51, 45, 0.09);
+    }
+
+
+    /* Metric label */
+
+    div[data-testid="stMetric"] label {
+
+        color: #817A75 !important;
+
+        font-size: 13px !important;
+
+        font-weight: 650 !important;
+    }
+
+
+    /* Metric value */
+
+    div[data-testid="stMetric"]
+    div[data-testid="stMetricValue"] {
+
+        color: #292727 !important;
+
+        font-weight: 800;
+    }
+
+
+    /* =====================================================
+       ALERTS
+       ===================================================== */
+
+    .stAlert {
+
+        border-radius: 14px !important;
+
+        border-width: 1px !important;
+
+        padding: 14px 18px !important;
+    }
+
+
+    /* =====================================================
+       TABS
+       ===================================================== */
+
+    button[data-baseweb="tab"] {
+
+        color: #77716D !important;
+
+        font-weight: 650;
+
+        padding: 12px 20px;
+
+        font-size: 15px;
+    }
+
+
+    button[data-baseweb="tab"][aria-selected="true"] {
+
+        color: #D47F59 !important;
+
+        font-weight: 750;
+    }
+
+
+    /* =====================================================
+       EXPANDERS
+       ===================================================== */
+
+    div[data-testid="stExpander"] {
+
+        background:
+            rgba(255, 255, 255, 0.92);
+
+        border:
+            1px solid #E8E0D9;
+
+        border-radius: 16px;
+
+        margin-bottom: 14px;
+
+        box-shadow:
+            0 4px 16px rgba(61, 51, 45, 0.05);
+    }
+
+
+    div[data-testid="stExpander"] summary {
+
+        color: #393532;
+
+        font-weight: 650;
+    }
+
+
+    /* =====================================================
+       SUCCESS / WARNING / INFO
+       ===================================================== */
+
+    div[data-testid="stAlert"] {
+
+        border-radius: 14px;
+
+        margin-top: 12px;
+
+        margin-bottom: 20px;
+    }
+
+
+    /* =====================================================
+       DIVIDERS
+       ===================================================== */
+
+    hr {
+
+        border: none;
+
+        border-top: 1px solid #E4DDD7;
+
+        margin-top: 30px;
+
+        margin-bottom: 30px;
+    }
+
+
+    /* =====================================================
+       CAPTIONS
+       ===================================================== */
+
+    .stCaption {
+
+        color: #8A837E !important;
+
+        line-height: 1.5;
+    }
+
+
+    /* =====================================================
+       LINKS
+       ===================================================== */
+
+    a {
+
+        color: #C87553 !important;
+
+        font-weight: 600;
+    }
+
+
+    /* =====================================================
+       SPACING BETWEEN STREAMLIT ELEMENTS
+       ===================================================== */
+
+    div[data-testid="stVerticalBlock"] {
+        gap: 0.65rem;
+    }
+
+
+    /* =====================================================
+       SCROLLBAR
+       ===================================================== */
+
+    ::-webkit-scrollbar {
+
+        width: 8px;
+    }
+
+
+    ::-webkit-scrollbar-track {
+
+        background: #F7F3EF;
+    }
+
+
+    ::-webkit-scrollbar-thumb {
+
+        background: #D7C8BE;
+
+        border-radius: 10px;
+    }
+
+
+    ::-webkit-scrollbar-thumb:hover {
+
+        background: #BDA99B;
+    }
+
 
 </style>
 """, unsafe_allow_html=True)
+
 
 
 # ---------------------------------------------------------
@@ -690,7 +1292,7 @@ elif page == "🥗 Meal Planner":
                 <p>
                 Click below to generate a personalized breakfast, lunch,
                 snacks and dinner plan based on your nutritional
-                requirements, using the Mistral API.
+                requirements, using the GEMINI API.
                 </p>
             </div>
             """,
@@ -886,7 +1488,7 @@ elif page == "ℹ️ About":
             <p>🎨 Streamlit</p>
             <p>📊 Pandas & NumPy</p>
             <p>🤖 Machine Learning</p>
-            <p>🧠 Mistral AI</p>
+            <p>🧠 GEMINI AI </p>
             <p>🗄️ SQLite Database</p>
             <p>📈 Plotly</p>
 
