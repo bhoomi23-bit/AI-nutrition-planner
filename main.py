@@ -6,6 +6,7 @@ from database import (
     register_user,
     verify_login,
     save_user_profile,
+    get_user_profile,
     save_meal_plan,
     get_meal_plans,
 )
@@ -764,6 +765,17 @@ if "user_id" not in st.session_state:
             if user:
                 st.session_state["user_id"] = user["user_id"]
                 st.session_state["username"] = user["username"]
+                st.session_state["name"] = user["username"]  # stand-in until profile sets a real name
+
+                profile = get_user_profile(user["user_id"])
+                if profile:
+                    st.session_state["age"] = profile["age"]
+                    st.session_state["gender"] = profile["gender"]
+                    st.session_state["height"] = profile["height_cm"]
+                    st.session_state["weight"] = profile["weight_kg"]
+                    st.session_state["activity_level"] = profile["activity_level"]
+                    st.session_state["dietary_preference"] = profile["dietary_preference"]
+                    st.session_state["allergies"] = profile["allergies"] or ""
                 st.rerun()
             else:
                 st.error("Invalid username or password.")
@@ -783,6 +795,18 @@ if "user_id" not in st.session_state:
                     new_user_id = register_user(signup_username, signup_email, signup_password)
                     st.session_state["user_id"] = new_user_id
                     st.session_state["username"] = signup_username
+                    st.session_state["name"] = signup_username  # stand-in until profile sets a real name
+
+                    profile = get_user_profile(new_user_id)
+                    if profile:
+                        st.session_state["age"] = profile["age"]
+                        st.session_state["gender"] = profile["gender"]
+                        st.session_state["height"] = profile["height_cm"]
+                        st.session_state["weight"] = profile["weight_kg"]
+                        st.session_state["activity_level"] = profile["activity_level"]
+                        st.session_state["dietary_preference"] = profile["dietary_preference"]
+                        st.session_state["allergies"] = profile["allergies"] or ""
+
                     st.success("Account created! Redirecting...")
                     st.rerun()
                 except Exception:
@@ -946,18 +970,24 @@ elif page == "👤 Profile":
 
         with col1:
 
-            name = st.text_input("Name")
+            name = st.text_input(
+                "Name",
+                value=st.session_state.get("name", "")
+            )
 
             age = st.number_input(
                 "Age",
                 min_value=1,
                 max_value=120,
-                value=20
+                value=int(st.session_state.get("age", 20))
             )
 
+            gender_options = ["Male", "Female", "Other"]
             gender = st.selectbox(
                 "Gender",
-                ["Male", "Female", "Other"]
+                gender_options,
+                index=gender_options.index(st.session_state["gender"])
+                if st.session_state.get("gender") in gender_options else 0
             )
 
         with col2:
@@ -966,14 +996,14 @@ elif page == "👤 Profile":
                 "Height (cm)",
                 min_value=50.0,
                 max_value=250.0,
-                value=165.0
+                value=float(st.session_state.get("height", 165.0))
             )
 
             weight = st.number_input(
                 "Weight (kg)",
                 min_value=10.0,
                 max_value=300.0,
-                value=60.0
+                value=float(st.session_state.get("weight", 60.0))
             )
 
         st.markdown(
@@ -985,48 +1015,60 @@ elif page == "👤 Profile":
 
         with col3:
 
+            activity_options = [
+                "Sedentary",
+                "Lightly Active",
+                "Moderately Active",
+                "Very Active",
+                "Extremely Active"
+            ]
             activity_level = st.selectbox(
                 "Activity Level",
-                [
-                    "Sedentary",
-                    "Lightly Active",
-                    "Moderately Active",
-                    "Very Active",
-                    "Extremely Active"
-                ]
+                activity_options,
+                index=activity_options.index(st.session_state["activity_level"])
+                if st.session_state.get("activity_level") in activity_options else 0
             )
 
+            diet_options = [
+                "Vegetarian",
+                "Non-Vegetarian",
+                "Vegan",
+                "Eggetarian"
+            ]
             dietary_preference = st.selectbox(
                 "Dietary Preference",
-                [
-                    "Vegetarian",
-                    "Non-Vegetarian",
-                    "Vegan",
-                    "Eggetarian"
-                ]
+                diet_options,
+                index=diet_options.index(st.session_state["dietary_preference"])
+                if st.session_state.get("dietary_preference") in diet_options else 0
             )
 
         with col4:
 
+            goal_options = [
+                "Weight Loss",
+                "Weight Maintenance",
+                "Weight Gain",
+                "Muscle Gain"
+            ]
             fitness_goal = st.selectbox(
                 "Fitness Goal",
-                [
-                    "Weight Loss",
-                    "Weight Maintenance",
-                    "Weight Gain",
-                    "Muscle Gain"
-                ]
+                goal_options,
+                index=goal_options.index(st.session_state["fitness_goal"])
+                if st.session_state.get("fitness_goal") in goal_options else 0
             )
 
             allergies = st.text_input(
                 "Allergies (if any)",
+                value=st.session_state.get("allergies", ""),
                 placeholder="Example: peanuts, lactose"
             )
 
+        meals_options = [3, 4, 5]
         meals_per_day = st.selectbox(
             "Meals per day",
-            [3, 4, 5],
-            index=0
+            meals_options,
+            index=meals_options.index(st.session_state["meals_per_day"])
+            if st.session_state.get("meals_per_day") in meals_options else 0
         )
 
         submitted = st.form_submit_button(
