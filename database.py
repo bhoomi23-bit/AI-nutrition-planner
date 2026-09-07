@@ -1,4 +1,3 @@
-
 """
 database.py
 SQLite database layer for the AI-Powered Personalized Nutrition and
@@ -19,9 +18,15 @@ import hashlib
 import hmac
 import os
 import json
+from contextlib import contextmanager
 from datetime import datetime
 
-DB_PATH = "nutrition_app.db"
+# Anchor the DB file to this script's own directory, NOT the current
+# working directory. Without this, running the app from a different
+# folder (different terminal, IDE config, deployment entrypoint) will
+# silently create/open a different, empty database file each time —
+# which looks exactly like "my data isn't saving".
+DB_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "nutrition_app.db")
 
 
 # ---------------------------------------------------------------------
@@ -35,80 +40,99 @@ def get_connection():
     return conn
 
 
+@contextmanager
+def db_connection():
+    """
+    Context manager that guarantees the connection is always closed,
+    even if an exception (e.g. sqlite3.IntegrityError on a duplicate
+    username) happens mid-function. Without this, a failed insert
+    left connections open indefinitely, which can lock the SQLite
+    file and cause the *next* write to silently fail or hang.
+
+    Commits on success, rolls back on any exception, always closes.
+    """
+    conn = get_connection()
+    try:
+        yield conn
+        conn.commit()
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
+
+
 # ---------------------------------------------------------------------
 # SCHEMA
 # ---------------------------------------------------------------------
 def init_db():
     """Create all tables if they don't already exist. Safe to call every app start."""
-    conn = get_connection()
-    cur = conn.cursor()
+    with db_connection() as conn:
+        cur = conn.cursor()
 
-    # ---- Users (login) ----
-    cur.execute("""
-        CREATE TABLE IF NOT EXISTS users (
-            user_id       INTEGER PRIMARY KEY AUTOINCREMENT,
-            username      TEXT UNIQUE NOT NULL,
-            email         TEXT UNIQUE NOT NULL,
-            password_hash TEXT NOT NULL,
-            salt          TEXT NOT NULL,
-            created_at    TEXT NOT NULL
-        )
-    """)
+        # ---- Users (login) ----
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS users (
+                user_id       INTEGER PRIMARY KEY AUTOINCREMENT,
+                username      TEXT UNIQUE NOT NULL,
+                email         TEXT UNIQUE NOT NULL,
+                password_hash TEXT NOT NULL,
+                salt          TEXT NOT NULL,
+                created_at    TEXT NOT NULL
+            )
+        """)
 
-    # ---- Health / profile info (Step 1 & 3 of your workflow) ----
-    cur.execute("""
-        CREATE TABLE IF NOT EXISTS user_profile (
-            profile_id        INTEGER PRIMARY KEY AUTOINCREMENT,
-            user_id           INTEGER NOT NULL,
-            age               INTEGER,
-            gender            TEXT,
-            height_cm         REAL,
-            weight_kg         REAL,
-            activity_level    TEXT,     -- e.g. sedentary, moderate, active
-            dietary_preference TEXT,    -- e.g. vegetarian, vegan, keto
-            fitness_goal      TEXT,     -- e.g. weight loss, muscle gain
-            allergies         TEXT,     -- comma-separated or JSON list
-            bmi               REAL,
-            daily_calories    REAL,
-            protein_g         REAL,
-            carbs_g           REAL,
-            fat_g             REAL,
-            fiber_g           REAL,
-            updated_at        TEXT NOT NULL,
-            FOREIGN KEY (user_id) REFERENCES users (user_id) ON DELETE CASCADE
-        )
-    """)
+        # ---- Health / profile info (Step 1 & 3 of your workflow) ----
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS user_profile (
+                profile_id        INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id           INTEGER NOT NULL,
+                age               INTEGER,
+                gender            TEXT,
+                height_cm         REAL,
+                weight_kg         REAL,
+                activity_level    TEXT,     -- e.g. sedentary, moderate, active
+                dietary_preference TEXT,    -- e.g. vegetarian, vegan, keto
+                fitness_goal      TEXT,     -- e.g. weight loss, muscle gain
+                allergies         TEXT,     -- comma-separated or JSON list
+                bmi               REAL,
+                daily_calories    REAL,
+                protein_g         REAL,
+                carbs_g           REAL,
+                fat_g             REAL,
+                fiber_g           REAL,
+                updated_at        TEXT NOT NULL,
+                FOREIGN KEY (user_id) REFERENCES users (user_id) ON DELETE CASCADE
+            )
+        """)
 
-    # ---- Meal plans (one row per AI-generated plan / day) ----
-    cur.execute("""
-        CREATE TABLE IF NOT EXISTS meal_plans (
-            plan_id      INTEGER PRIMARY KEY AUTOINCREMENT,
-            user_id      INTEGER NOT NULL,
-            plan_date    TEXT NOT NULL,      -- date the plan is FOR
-            ai_summary   TEXT,               -- AI's dietary tips/explanation
-            created_at   TEXT NOT NULL,
-            FOREIGN KEY (user_id) REFERENCES users (user_id) ON DELETE CASCADE
-        )
-    """)
+        # ---- Meal plans (one row per AI-generated plan / day) ----
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS meal_plans (
+                plan_id      INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id      INTEGER NOT NULL,
+                plan_date    TEXT NOT NULL,      -- date the plan is FOR
+                ai_summary   TEXT,               -- AI's dietary tips/explanation
+                created_at   TEXT NOT NULL,
+                FOREIGN KEY (user_id) REFERENCES users (user_id) ON DELETE CASCADE
+            )
+        """)
 
-    # ---- Individual meals/items inside a plan ----
-    cur.execute("""
-        CREATE TABLE IF NOT EXISTS meal_plan_items (
-            item_id      INTEGER PRIMARY KEY AUTOINCREMENT,
-            plan_id      INTEGER NOT NULL,
-            meal_type    TEXT NOT NULL,   -- breakfast, lunch, dinner, snack
-            food_name    TEXT NOT NULL,
-            calories     REAL,
-            protein_g    REAL,
-            carbs_g      REAL,
-            fat_g        REAL,
-            recipe_text  TEXT,            -- AI-generated recipe / instructions
-            FOREIGN KEY (plan_id) REFERENCES meal_plans (plan_id) ON DELETE CASCADE
-        )
-    """)
-
-    conn.commit()
-    conn.close()
+        # ---- Individual meals/items inside a plan ----
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS meal_plan_items (
+                item_id      INTEGER PRIMARY KEY AUTOINCREMENT,
+                plan_id      INTEGER NOT NULL,
+                meal_type    TEXT NOT NULL,   -- breakfast, lunch, dinner, snack
+                food_name    TEXT NOT NULL,
+                calories     REAL,
+                protein_g    REAL,
+                carbs_g      REAL,
+                fat_g        REAL,
+                recipe_text  TEXT,            -- AI-generated recipe / instructions
+                FOREIGN KEY (plan_id) REFERENCES meal_plans (plan_id) ON DELETE CASCADE
+            )
+        """)
 
 
 # ---------------------------------------------------------------------
@@ -131,29 +155,32 @@ def _verify_password(password: str, salt_hex: str, stored_hash_hex: str) -> bool
 # USER / LOGIN FUNCTIONS
 # ---------------------------------------------------------------------
 def register_user(username: str, email: str, password: str) -> int:
-    """Create a new user. Returns the new user_id, or raises sqlite3.IntegrityError
-    if username/email already exists."""
+    """
+    Create a new user. Returns the new user_id.
+    Raises ValueError (with a clear message) if the username/email is
+    already taken, instead of letting a raw sqlite3.IntegrityError
+    bubble up and potentially get silently swallowed by calling code.
+    """
     pw_hash, salt = _hash_password(password)
-    conn = get_connection()
-    cur = conn.cursor()
-    cur.execute(
-        """INSERT INTO users (username, email, password_hash, salt, created_at)
-           VALUES (?, ?, ?, ?, ?)""",
-        (username, email, pw_hash, salt, datetime.utcnow().isoformat()),
-    )
-    conn.commit()
-    user_id = cur.lastrowid
-    conn.close()
-    return user_id
+    try:
+        with db_connection() as conn:
+            cur = conn.cursor()
+            cur.execute(
+                """INSERT INTO users (username, email, password_hash, salt, created_at)
+                   VALUES (?, ?, ?, ?, ?)""",
+                (username, email, pw_hash, salt, datetime.utcnow().isoformat()),
+            )
+            return cur.lastrowid
+    except sqlite3.IntegrityError as e:
+        raise ValueError("Username or email is already registered.") from e
 
 
 def verify_login(username: str, password: str):
     """Returns the user row (as a dict) if credentials are correct, else None."""
-    conn = get_connection()
-    cur = conn.cursor()
-    cur.execute("SELECT * FROM users WHERE username = ?", (username,))
-    row = cur.fetchone()
-    conn.close()
+    with db_connection() as conn:
+        cur = conn.cursor()
+        cur.execute("SELECT * FROM users WHERE username = ?", (username,))
+        row = cur.fetchone()
     if row and _verify_password(password, row["salt"], row["password_hash"]):
         return dict(row)
     return None
@@ -168,40 +195,38 @@ def save_user_profile(user_id: int, profile: dict):
     age, gender, height_cm, weight_kg, activity_level, dietary_preference,
     fitness_goal, allergies, bmi, daily_calories, protein_g, carbs_g, fat_g, fiber_g
     """
-    conn = get_connection()
-    cur = conn.cursor()
-    # One profile row per user: update if it exists, else insert
-    cur.execute("SELECT profile_id FROM user_profile WHERE user_id = ?", (user_id,))
-    existing = cur.fetchone()
     fields = ["age", "gender", "height_cm", "weight_kg", "activity_level",
               "dietary_preference", "fitness_goal", "allergies", "bmi",
               "daily_calories", "protein_g", "carbs_g", "fat_g", "fiber_g"]
     values = [profile.get(f) for f in fields]
 
-    if existing:
-        set_clause = ", ".join(f"{f} = ?" for f in fields)
-        cur.execute(
-            f"UPDATE user_profile SET {set_clause}, updated_at = ? WHERE user_id = ?",
-            (*values, datetime.utcnow().isoformat(), user_id),
-        )
-    else:
-        cols = ", ".join(fields)
-        placeholders = ", ".join("?" for _ in fields)
-        cur.execute(
-            f"""INSERT INTO user_profile (user_id, {cols}, updated_at)
-                VALUES (?, {placeholders}, ?)""",
-            (user_id, *values, datetime.utcnow().isoformat()),
-        )
-    conn.commit()
-    conn.close()
+    with db_connection() as conn:
+        cur = conn.cursor()
+        # One profile row per user: update if it exists, else insert
+        cur.execute("SELECT profile_id FROM user_profile WHERE user_id = ?", (user_id,))
+        existing = cur.fetchone()
+
+        if existing:
+            set_clause = ", ".join(f"{f} = ?" for f in fields)
+            cur.execute(
+                f"UPDATE user_profile SET {set_clause}, updated_at = ? WHERE user_id = ?",
+                (*values, datetime.utcnow().isoformat(), user_id),
+            )
+        else:
+            cols = ", ".join(fields)
+            placeholders = ", ".join("?" for _ in fields)
+            cur.execute(
+                f"""INSERT INTO user_profile (user_id, {cols}, updated_at)
+                    VALUES (?, {placeholders}, ?)""",
+                (user_id, *values, datetime.utcnow().isoformat()),
+            )
 
 
 def get_user_profile(user_id: int):
-    conn = get_connection()
-    cur = conn.cursor()
-    cur.execute("SELECT * FROM user_profile WHERE user_id = ?", (user_id,))
-    row = cur.fetchone()
-    conn.close()
+    with db_connection() as conn:
+        cur = conn.cursor()
+        cur.execute("SELECT * FROM user_profile WHERE user_id = ?", (user_id,))
+        row = cur.fetchone()
     return dict(row) if row else None
 
 
@@ -218,46 +243,43 @@ def save_meal_plan(user_id: int, plan_date: str, ai_summary: str, items: list):
         "recipe_text": "Cook oats with water/milk, top with sliced banana..."
       }
     """
-    conn = get_connection()
-    cur = conn.cursor()
-    cur.execute(
-        """INSERT INTO meal_plans (user_id, plan_date, ai_summary, created_at)
-           VALUES (?, ?, ?, ?)""",
-        (user_id, plan_date, ai_summary, datetime.utcnow().isoformat()),
-    )
-    plan_id = cur.lastrowid
-
-    for item in items:
+    with db_connection() as conn:
+        cur = conn.cursor()
         cur.execute(
-            """INSERT INTO meal_plan_items
-               (plan_id, meal_type, food_name, calories, protein_g, carbs_g, fat_g, recipe_text)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
-            (plan_id, item.get("meal_type"), item.get("food_name"),
-             item.get("calories"), item.get("protein_g"), item.get("carbs_g"),
-             item.get("fat_g"), item.get("recipe_text")),
+            """INSERT INTO meal_plans (user_id, plan_date, ai_summary, created_at)
+               VALUES (?, ?, ?, ?)""",
+            (user_id, plan_date, ai_summary, datetime.utcnow().isoformat()),
         )
-    conn.commit()
-    conn.close()
-    return plan_id
+        plan_id = cur.lastrowid
+
+        for item in items:
+            cur.execute(
+                """INSERT INTO meal_plan_items
+                   (plan_id, meal_type, food_name, calories, protein_g, carbs_g, fat_g, recipe_text)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+                (plan_id, item.get("meal_type"), item.get("food_name"),
+                 item.get("calories"), item.get("protein_g"), item.get("carbs_g"),
+                 item.get("fat_g"), item.get("recipe_text")),
+            )
+        return plan_id
 
 
 def get_meal_plans(user_id: int):
     """Returns all meal plans for a user, each with its nested items."""
-    conn = get_connection()
-    cur = conn.cursor()
-    cur.execute(
-        "SELECT * FROM meal_plans WHERE user_id = ? ORDER BY plan_date DESC",
-        (user_id,),
-    )
-    plans = [dict(row) for row in cur.fetchall()]
-
-    for plan in plans:
+    with db_connection() as conn:
+        cur = conn.cursor()
         cur.execute(
-            "SELECT * FROM meal_plan_items WHERE plan_id = ?", (plan["plan_id"],)
+            "SELECT * FROM meal_plans WHERE user_id = ? ORDER BY plan_date DESC",
+            (user_id,),
         )
-        plan["items"] = [dict(row) for row in cur.fetchall()]
+        plans = [dict(row) for row in cur.fetchall()]
 
-    conn.close()
+        for plan in plans:
+            cur.execute(
+                "SELECT * FROM meal_plan_items WHERE plan_id = ?", (plan["plan_id"],)
+            )
+            plan["items"] = [dict(row) for row in cur.fetchall()]
+
     return plans
 
 
@@ -266,12 +288,12 @@ def get_meal_plans(user_id: int):
 # ---------------------------------------------------------------------
 if __name__ == "__main__":
     init_db()
-    print("Database initialized:", DB_PATH)
+    print("Database initialized at:", DB_PATH)
 
     try:
         uid = register_user("test_user", "test@example.com", "Passw0rd!")
         print("Registered user_id:", uid)
-    except sqlite3.IntegrityError:
+    except ValueError:
         user = verify_login("test_user", "Passw0rd!")
         uid = user["user_id"]
         print("User already existed, logged in as:", uid)
